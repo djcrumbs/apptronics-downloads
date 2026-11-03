@@ -1,0 +1,68 @@
+{
+  "name": "Neon Breaker",
+  "short_name": "Neon Breaker",
+  "description": "Neon arcade brick-breaker featuring the Plasma Chain mechanic — chain 4 hits in 1.1 seconds to ignite plasma mode. 30 campaign levels across 3 electrifying worlds.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#000508",
+  "theme_color": "#00ffff",
+  "lang": "en-GB",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "assets/icons/icon-44.png",  "sizes": "44x44",   "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-71.png",  "sizes": "71x71",   "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-150.png", "sizes": "150x150", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-310.png", "sizes": "310x310", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    {
+      "src": "assets/screenshots/gameplay-circuit.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "label": "Circuit World — neon cyan bricks"
+    },
+    {
+      "src": "assets/screenshots/gameplay-plasma.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "label": "Plasma World — pink/purple bricks with multi-ball"
+    },
+    {
+      "src": "assets/screenshots/gameplay-inferno.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "label": "Inferno World — orange/red fire bricks"
+    },
+    {
+      "src": "assets/screenshots/plasma-chain.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "label": "Plasma Chain activation — screen flare and bonus score"
+    },
+    {
+      "src": "assets/screenshots/level-complete.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "label": "Level complete with score and combo results"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Play Now",
+      "short_name": "Play",
+      "description": "Jump straight into Neon Breaker",
+      "url": "/?action=play",
+      "icons": [{ "src": "assets/icons/icon-96.png", "sizes": "96x96" }]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "windows",
+      "url": "https://www.microsoft.com/store/apps/PLACEHOLDER_STORE_ID",
+      "id": "AppTronicsGameStudios.NeonBreaker"
+    }
+  ],
+  "prefer_related_applications": false
+}
