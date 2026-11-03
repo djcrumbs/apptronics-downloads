@@ -4,11 +4,32 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NEON BREAKER - Apptronics Game Studios</title>
+<!--
+  ════════════════════════════════════════════════════════════
+  MICROSOFT ADVERTISING SDK — REPLACE THESE TWO VALUES
+  ────────────────────────────────────────────────────────────
+  1. Go to https://pubcenter.microsoft.com
+  2. Sign in → My apps → Add app → Windows → enter "Neon Breaker"
+  3. Create a Banner ad unit  → copy Application ID  + Ad Unit ID
+  4. Create an Interstitial ad unit (Video Interstitial or Interstitial)
+     → same Application ID, new Ad Unit ID
+  5. Paste both IDs below and remove "REPLACE_WITH_" prefix
+  ════════════════════════════════════════════════════════════
+-->
+<script>
+  // ── AD CONFIGURATION ─────────────────────────────────────
+  const MS_APP_ID            = 'REPLACE_WITH_YOUR_APPLICATION_ID';
+  const MS_BANNER_UNIT_ID    = 'REPLACE_WITH_YOUR_BANNER_AD_UNIT_ID';
+  const MS_REWARDED_UNIT_ID  = 'REPLACE_WITH_YOUR_INTERSTITIAL_AD_UNIT_ID';
+  const MS_IAP_PRODUCT_ID    = 'REPLACE_WITH_YOUR_IAP_PRODUCT_ID';
+  // ─────────────────────────────────────────────────────────
+</script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   background: #000;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
@@ -180,6 +201,32 @@ canvas { display: block; cursor: none; }
   letter-spacing: 1px;
 }
 .how-box b { color: #00ffff; }
+/* ── AD BANNER ── */
+#adBanner {
+  width: 480px; height: 60px;
+  background: #000a14;
+  border-top: 1px solid #001a2e;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; overflow: hidden;
+}
+#adBanner.hidden { display: none; }
+#adBanner div[id^="ms-ad"] { width: 480px; height: 60px; }
+/* ── PREMIUM / REWARDED BUTTONS ── */
+.menu-btn.gold {
+  border-color: #ffcc00; color: #ffcc00;
+  text-shadow: 0 0 8px #ffcc00;
+  box-shadow: 0 0 8px #ffcc0033;
+}
+.menu-btn.gold:hover { background: #ffcc001a; box-shadow: 0 0 20px #ffcc0066; }
+.menu-btn.green-btn {
+  border-color: #00ff88; color: #00ff88;
+  text-shadow: 0 0 8px #00ff88;
+}
+.menu-btn.green-btn:hover { background: #00ff881a; }
+.prem-badge {
+  font-size: 11px; letter-spacing: 3px; color: #ffcc00;
+  text-shadow: 0 0 8px #ffcc00; margin-bottom: 6px;
+}
 </style>
 </head>
 <body>
@@ -207,10 +254,13 @@ canvas { display: block; cursor: none; }
   <!-- Settings -->
   <div class="overlay hidden" id="settingsMenu">
     <div class="neon-title" style="font-size:30px;margin-bottom:28px;">SETTINGS</div>
+    <div class="prem-badge" id="premBadge" style="display:none">✦ PREMIUM — ADS REMOVED ✦</div>
     <div class="settings-row"><span>SOUND FX</span><button class="tog active" id="togSound">ON</button></div>
     <div class="settings-row"><span>MUSIC</span><button class="tog active" id="togMusic">ON</button></div>
     <div class="settings-row"><span>PARTICLES</span><button class="tog active" id="togParticles">ON</button></div>
     <div style="height:20px;"></div>
+    <button class="menu-btn gold" id="btnSettPremium">✦ REMOVE ADS — £1.99</button>
+    <div style="height:8px;"></div>
     <button class="menu-btn" id="btnSettBack">BACK</button>
   </div>
 
@@ -238,12 +288,20 @@ canvas { display: block; cursor: none; }
     <div class="score-lrg" id="goScore">0</div>
     <div class="label-sm" id="goLevel">LEVEL 1</div>
     <div class="hs-badge" id="goHSBadge">✦ NEW HIGH SCORE ✦</div>
-    <div style="height:16px;"></div>
+    <div style="height:12px;"></div>
+    <button class="menu-btn green-btn" id="btnWatchAd" style="display:none">▶ WATCH AD · +1 LIFE</button>
     <button class="menu-btn" id="btnRetry">PLAY AGAIN</button>
+    <button class="menu-btn gold" id="btnGoPremium">✦ REMOVE ADS — £1.99</button>
     <button class="menu-btn red" id="btnMenuGO">MAIN MENU</button>
   </div>
 
   <div id="chainNotif">⚡ PLASMA CHAIN! ⚡</div>
+</div>
+
+<!-- Microsoft Advertising banner — shown below canvas, hidden when Premium -->
+<div id="adBanner">
+  <!-- AdControl is created by Monetize class once SDK is confirmed available -->
+  <div id="ms-ad-banner"></div>
 </div>
 
 <script>
@@ -442,6 +500,130 @@ function makeEndless(lvl) {
   return{wi:Math.floor(Math.random()*3),rows,grid};
 }
 
+// ─── MONETIZE ─────────────────────────────────────────────────
+// Detects UWP context (Windows Store) and wires real Microsoft Advertising SDK
+// and Windows.Services.Store IAP. Falls back to silent no-ops in a browser.
+class Monetize {
+  constructor() {
+    this.premium = this._loadPremium();
+    this.rewardCooldown = 0;
+    this.rewardUsedThisLife = false;
+    this._adCtrl = null;
+    this._interstitial = null;
+    this._inUwp = typeof Windows !== 'undefined';
+    this._applyUI();
+    if (!this.premium) this._initBanner();
+  }
+
+  // ── Persistence ──
+  _loadPremium() {
+    try { return localStorage.getItem('nb_prem') === '1'; } catch { return false; }
+  }
+  _savePremium() {
+    try { localStorage.setItem('nb_prem', '1'); } catch {}
+  }
+
+  // ── Banner ad ──
+  _initBanner() {
+    if (!this._inUwp || typeof MicrosoftNSJS === 'undefined') return;
+    if (MS_APP_ID.startsWith('REPLACE')) return; // placeholders not yet filled
+    try {
+      const el = document.getElementById('ms-ad-banner');
+      this._adCtrl = new MicrosoftNSJS.Advertising.AdControl(el, {
+        applicationId: MS_APP_ID,
+        adUnitId: MS_BANNER_UNIT_ID,
+        width: 480, height: 60
+      });
+      this._adCtrl.onErrorOccurred = (s, e) => console.warn('AdControl error', e.errorMessage);
+    } catch (e) { console.warn('AdControl init failed', e); }
+  }
+
+  // ── Rewarded interstitial ──
+  canWatchAd() {
+    return !this.premium && !this.rewardUsedThisLife && this.rewardCooldown <= 0;
+  }
+
+  watchAd(onRewarded, onCancelled) {
+    this.rewardUsedThisLife = true;
+    if (this._inUwp && typeof MicrosoftNSJS !== 'undefined' && !MS_REWARDED_UNIT_ID.startsWith('REPLACE')) {
+      try {
+        const ad = new MicrosoftNSJS.Advertising.InterstitialAd();
+        this._interstitial = ad;
+        ad.onCompleted = () => { this.rewardCooldown = 120; onRewarded(); };
+        ad.onCancelled = () => { this.rewardUsedThisLife = false; if (onCancelled) onCancelled(); };
+        ad.onErrorOccurred = (s, e) => { console.warn('Interstitial error', e.errorMessage); onRewarded(); };
+        ad.requestAd(MicrosoftNSJS.Advertising.InterstitialAdType.video, MS_APP_ID, MS_REWARDED_UNIT_ID);
+        ad.show();
+        return;
+      } catch (e) { console.warn('Interstitial failed', e); }
+    }
+    // Not in UWP or placeholders not filled — grant reward immediately (dev/preview)
+    this.rewardCooldown = 120;
+    onRewarded();
+  }
+
+  // ── IAP purchase ──
+  async purchase() {
+    if (this._inUwp && typeof Windows !== 'undefined' && !MS_IAP_PRODUCT_ID.startsWith('REPLACE')) {
+      try {
+        const ctx = Windows.Services.Store.StoreContext.getDefault();
+        const result = await ctx.requestPurchaseAsync(MS_IAP_PRODUCT_ID);
+        const Status = Windows.Services.Store.StorePurchaseStatus;
+        if (result.status === Status.succeeded || result.status === Status.alreadyPurchased) {
+          this._grantPremium();
+        }
+        return;
+      } catch (e) { console.warn('IAP purchase failed', e); }
+    }
+    // Not in UWP — grant immediately so devs can test UI flow
+    this._grantPremium();
+  }
+
+  async restorePurchase() {
+    if (this._loadPremium()) { this._grantPremium(); return; }
+    if (this._inUwp && typeof Windows !== 'undefined') {
+      try {
+        const ctx = Windows.Services.Store.StoreContext.getDefault();
+        const result = await ctx.getStoreProductForCurrentAppAsync();
+        if (result && result.product) {
+          const license = await ctx.getLicenseInfoForCurrentAppAsync();
+          if (license.addOnLicenses && license.addOnLicenses[MS_IAP_PRODUCT_ID]?.isActive) {
+            this._grantPremium();
+          }
+        }
+      } catch (e) { console.warn('Restore failed', e); }
+    }
+  }
+
+  _grantPremium() {
+    this.premium = true;
+    this._savePremium();
+    this._applyUI();
+    if (this._adCtrl) { try { this._adCtrl.suspend(); } catch {} }
+  }
+
+  _applyUI() {
+    const banner = document.getElementById('adBanner');
+    const badge  = document.getElementById('premBadge');
+    const btnGO  = document.getElementById('btnGoPremium');
+    const btnS   = document.getElementById('btnSettPremium');
+    if (this.premium) {
+      if (banner) banner.classList.add('hidden');
+      if (badge)  badge.style.display = 'block';
+      if (btnGO)  btnGO.style.display = 'none';
+      if (btnS)   btnS.style.display  = 'none';
+    } else {
+      if (banner) banner.classList.remove('hidden');
+    }
+  }
+
+  update(dt) {
+    if (this.rewardCooldown > 0) this.rewardCooldown -= dt;
+  }
+
+  resetLife() { this.rewardUsedThisLife = false; }
+}
+
 // ─── ROUNDED RECT HELPER ──────────────────────────────────────
 function rrect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -461,6 +643,7 @@ class Game {
     this.audio = new Audio();
     this.parts = new Particles();
 
+    this.mon = new Monetize();
     this.state = 'menu';
     this.score = 0; this.lives = 3; this.level = 1;
     this.endless = false;
@@ -529,6 +712,15 @@ class Game {
     $('btnNextLevel').onclick = () => { this._hideAll(); this.level++; this._loadLevel(); };
     $('btnRetry').onclick = () => { this._hideAll(); this._startGame(this.endless); };
     $('btnMenuGO').onclick = () => { this._hideAll(); this.state='menu'; this._show('mainMenu'); this.audio.stopMusic(); };
+    $('btnWatchAd').onclick = () => {
+      this.mon.watchAd(() => {
+        this.lives = 1; this._hideAll();
+        this._spawnBall(false); this.state='playing';
+        this.audio.startMusic(this.worldIdx);
+      });
+    };
+    $('btnGoPremium').onclick = () => this.mon.purchase();
+    $('btnSettPremium').onclick = () => this.mon.purchase();
     $('togSound').onclick = e => {
       this.audio.sfx = !this.audio.sfx;
       e.target.textContent = this.audio.sfx?'ON':'OFF';
@@ -828,6 +1020,7 @@ class Game {
   _loseLife() {
     this.lives--; this.audio.lifeLost(); this.combo=0;
     this.activePow={}; this.paddle.w=88;
+    this.mon.resetLife();
     if(this.lives<=0) this._gameOver();
     else this._spawnBall(false);
   }
@@ -851,6 +1044,7 @@ class Game {
     document.getElementById('goScore').textContent=this.score.toLocaleString();
     document.getElementById('goLevel').textContent=`LEVEL ${this.level}`;
     document.getElementById('goHSBadge').style.display=isNew?'block':'none';
+    document.getElementById('btnWatchAd').style.display=this.mon.canWatchAd()?'block':'none';
     this._show('gameOverScreen');
   }
 
@@ -1015,6 +1209,7 @@ class Game {
   _loop(ts) {
     const dt=Math.min((ts-(this._prev||ts))/1000,0.05);
     this._prev=ts;
+    this.mon.update(dt);
     this._update(dt);
     this._draw();
     requestAnimationFrame(t=>this._loop(t));
